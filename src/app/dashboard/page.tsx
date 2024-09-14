@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useUser } from '@/contexts/UserContext';
-import { Machine, User } from '@/types';
+import { Machine, User, QueueItem } from '@/types';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/Modal';
 
 export default function DashboardPage() {
   const { user, setUser, loading } = useUser();
-  const [machines, setMachines] = useState<Machine[]>([]);
+  const [machines, setMachines] = useState<Record<string, Machine>>({});
+  const [queueItem, setQueueItem] = useState<QueueItem | null>(null);
   const [gymId, setGymId] = useState('');
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
@@ -17,7 +18,7 @@ export default function DashboardPage() {
   const floorPlanRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  const selectedMachine = machines.find(machine => machine.id === selectedMachineId) || null;
+  const selectedMachine = selectedMachineId ? machines[selectedMachineId] : null;
 
   // Redirect to login if user is not logged in
   useEffect(() => {
@@ -48,7 +49,8 @@ export default function DashboardPage() {
         wsRef.current?.send(JSON.stringify({
           type: 'authenticate',
           token: wsToken,
-          gymId: user?.gymId
+          gymId: user?.gymId,
+          queuedMachineId: user?.queueItem?.machineId
         }));
       } else {
         console.error('No WebSocket token found');
@@ -57,8 +59,36 @@ export default function DashboardPage() {
 
     wsRef.current.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      if (message.type === 'machineStatus') {
-        setMachines(message.data);
+      switch (message.type) {
+        case 'machineStatus':
+          for (const machine of message.data) {
+            setMachines(prevMachines => ({
+              ...prevMachines,
+              [machine.id]: machine
+            }));
+          }
+          break;
+        case 'machineUpdate':
+          if (message.data) {
+            setMachines(prevMachines => ({
+              ...prevMachines,
+              [message.machineId]: {
+                ...prevMachines[message.machineId],
+                ...message.data
+              }
+            }));
+          } else {
+            setMachines(({ [message.machineId]: _, ...rest }) => rest);
+          }
+          break;
+        case 'userUpdate':
+          setUser(user ? {...user, ...message.data} : null);
+          break;
+        case 'queueUpdate':
+          setQueueItem(message.data);
+          break;
+        default:
+          console.error('Unknown message type:', message.type);
       }
     };
 
@@ -84,7 +114,7 @@ export default function DashboardPage() {
       });
       if (response.ok) {
         setGymId('');
-        setUser(user ? {...user, gymId: gymId ? gymId : null} : null);
+        setUser(user ? {...user, gymId} : null);
       }
     } catch (error) {
       console.error('Error starting session:', error);
@@ -98,8 +128,7 @@ export default function DashboardPage() {
         credentials: 'include',
       });
       if (response.ok) {
-        setUser(user ? {...user, gymId: null} : null);
-        setMachines([]);
+        setMachines({});
         handleCloseModal();
       }
     } catch (error) {
@@ -115,7 +144,7 @@ export default function DashboardPage() {
       });
       if (response.ok) {
         setUser(null);
-        setMachines([]);
+        setMachines({});
       }
     } catch (error) {
       console.error('Error logging out:', error);
@@ -148,10 +177,7 @@ export default function DashboardPage() {
         method: 'POST',
         credentials: 'include',
       });
-      if (response.ok) {
-        const data = await response.json();
-        setUser(user ? {...user, currentWorkoutLogId: data.id} : null);
-      } else {
+      if (!response.ok) {
         console.error('Failed to tag on to machine');
       }
     } catch (error) {
@@ -165,15 +191,41 @@ export default function DashboardPage() {
         method: 'PATCH',
         credentials: 'include',
       });
-      if (response.ok) {
-        setUser(user ? {...user, currentWorkoutLogId: null} : null);
-      } else {
+      if (!response.ok) {
         console.error('Failed to tag off from machine');
       }
     } catch (error) {
       console.error('Error tagging off from machine:', error);
     }
   };
+
+  const handleEnqueue = async (machineId: string) => {
+    try {
+      const response = await fetch(`http://localhost:3000/machines/${machineId}/queue`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        console.error('Failed to enqueue');
+      }
+    } catch (error) {
+      console.error('Error enqueuing:', error);
+    }
+  }
+
+  const handleRemoveFromQueue = async (userId: string) => {
+    try {
+      const response = await fetch(`http://localhost:3000/queue`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        console.error('Failed to remove from queue');
+      }
+    } catch (error) {
+      console.error('Error removing from queue:', error);
+    }
+  }
 
   const getMachineButtonClass = (machine: Machine) => {
     const baseClasses = "absolute w-8 h-8 rounded-full flex items-center justify-center text-white font-bold";
@@ -244,7 +296,7 @@ export default function DashboardPage() {
             ref={floorPlanRef}
             className="relative w-full h-[600px] bg-gray-800 border border-gray-700 rounded-lg"
           >
-            {machines.map((machine) => (
+            {Object.values(machines).map((machine) => (
               <button
                 key={machine.id}
                 onClick={(e) => handleMachineClick(machine, e)}
@@ -273,6 +325,7 @@ export default function DashboardPage() {
             <p>Floor: {selectedMachine.location[0]}</p>
             <p>Position: ({selectedMachine.location[1]}, {selectedMachine.location[2]})</p>
             <p>Status: {selectedMachine.currentWorkoutLogId ? 'Active' : 'Inactive'}</p>
+            
             {user.currentWorkoutLogId && user.currentWorkoutLogId === selectedMachine.currentWorkoutLogId ? (
               <button
                 onClick={() => handleTagOff(selectedMachine.id)}
@@ -288,6 +341,30 @@ export default function DashboardPage() {
                 Tag On
               </button>
             )}
+            
+            {queueItem && queueItem.machineId === selectedMachine.id ? (
+              <p className="mt-2 text-yellow-400">Your position in queue: {queueItem.position}</p>
+            ) : (
+              <p className="mt-2 text-yellow-400">Queue size: {selectedMachine.queueSize} / {selectedMachine.maximumQueueSize}</p> 
+            )}
+            
+            {!user.currentWorkoutLogId || user.currentWorkoutLogId !== selectedMachine.currentWorkoutLogId ? (
+              queueItem === null ? (
+                <button
+                  onClick={() => handleEnqueue(selectedMachine.id)}
+                  className="mt-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Enqueue
+                </button>
+              ) : queueItem.machineId === selectedMachine.id && (
+                <button
+                  onClick={() => handleRemoveFromQueue(user.id)}
+                  className="mt-4 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Remove from Queue
+                </button>
+              )
+            ) : null}
           </div>
         )}
       </Modal>

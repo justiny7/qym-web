@@ -4,6 +4,7 @@ export interface User {
   name: string;
   gymId: string | null;
   currentWorkoutLogId: string | null;
+  queueItem: QueueItem | null;
 }
 
 export interface Machine {
@@ -12,4 +13,14 @@ export interface Machine {
   type: string;
   location: [number, number, number]; // [floor, x, y]
   currentWorkoutLogId: string | null;
+  queueSize: number;
+}
+
+export interface QueueItem {
+  id: string;
+  userId: string;
+  machineId: string;
+  timeEnqueued: Date;
+  timeReachedFront: Date | null;
+  position: number;
 }
