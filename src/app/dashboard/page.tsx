@@ -17,6 +17,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const floorPlanRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const [countdownNotification, setCountdownNotification] = useState<{
+    machineId: string;
+    message: string;
+    remainingTime: number;
+    endTime: number;
+  } | null>(null);
 
   const selectedMachine = selectedMachineId ? machines[selectedMachineId] : null;
 
@@ -87,6 +93,9 @@ export default function DashboardPage() {
         case 'queueUpdate':
           setQueueItem(message.data);
           break;
+        case 'countdownNotification':
+          setCountdownNotification(message.data);
+          break;
         default:
           console.error('Unknown message type:', message.type);
       }
@@ -100,6 +109,21 @@ export default function DashboardPage() {
       console.log('WebSocket disconnected');
     };
   };
+
+  useEffect(() => {
+    if (countdownNotification && countdownNotification.remainingTime > 0) {
+      const timer = setTimeout(() => {
+        setCountdownNotification(prev => 
+          prev ? { ...prev, remainingTime: prev.remainingTime - 1 } : null
+        );
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    } else if (countdownNotification && countdownNotification.remainingTime === 0) {
+      setCountdownNotification(null);
+    }
+  }, [countdownNotification]);
+
 
   const handleGymIdSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,7 +372,8 @@ export default function DashboardPage() {
               <p className="mt-2 text-yellow-400">Queue size: {selectedMachine.queueSize} / {selectedMachine.maximumQueueSize}</p> 
             )}
             
-            {!user.currentWorkoutLogId || user.currentWorkoutLogId !== selectedMachine.currentWorkoutLogId ? (
+            {(selectedMachine.currentWorkoutLogId || selectedMachine.queueSize > 0) &&
+            (!user.currentWorkoutLogId || user.currentWorkoutLogId !== selectedMachine.currentWorkoutLogId) ? (
               queueItem === null ? (
                 <button
                   onClick={() => handleEnqueue(selectedMachine.id)}
@@ -368,6 +393,18 @@ export default function DashboardPage() {
           </div>
         )}
       </Modal>
+
+      {countdownNotification && (
+        <div className="fixed bottom-4 right-4 bg-yellow-500 text-white p-4 rounded shadow-lg">
+          {countdownNotification.message}
+          <button
+            onClick={() => handleTagOn(countdownNotification.machineId)}
+            className="ml-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Tag On Now
+          </button>
+        </div>
+      )}
     </div>
   );
 }
