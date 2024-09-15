@@ -14,6 +14,7 @@ export interface Machine {
   location: [number, number, number]; // [floor, x, y]
   currentWorkoutLogId: string | null;
   queueSize: number;
+  maximumQueueSize: number;
 }
 
 export interface QueueItem {
