@@ -22,6 +22,5 @@ export interface QueueItem {
   userId: string;
   machineId: string;
   timeEnqueued: Date;
-  timeReachedFront: Date | null;
   position: number;
 }

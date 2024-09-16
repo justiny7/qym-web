@@ -21,7 +21,6 @@ export default function DashboardPage() {
     machineId: string;
     message: string;
     remainingTime: number;
-    endTime: number;
   } | null>(null);
 
   const selectedMachine = selectedMachineId ? machines[selectedMachineId] : null;
@@ -111,15 +110,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (countdownNotification && countdownNotification.remainingTime > 0) {
-      const timer = setTimeout(() => {
-        setCountdownNotification(prev => 
-          prev ? { ...prev, remainingTime: prev.remainingTime - 1 } : null
-        );
-      }, 1000);
-
-      return () => clearTimeout(timer);
-    } else if (countdownNotification && countdownNotification.remainingTime === 0) {
+    if (countdownNotification && countdownNotification.remainingTime === 0) {
       setCountdownNotification(null);
     }
   }, [countdownNotification]);
