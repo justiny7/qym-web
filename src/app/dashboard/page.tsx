@@ -17,7 +17,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const floorPlanRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const [countdownNotification, setCountdownNotification] = useState<{
+  const [queueCountdown, setQueueCountdown] = useState<{
     machineId: string;
     message: string;
     remainingTime: number;
@@ -36,6 +36,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user && user.gymId) {
       connectWebSocket();
+    } else if (user && !user.gymId) {
+      setQueueCountdown(null);
+      setMachines({});
+      handleCloseModal();
     }
     return () => {
       if (wsRef.current) {
@@ -92,8 +96,18 @@ export default function DashboardPage() {
         case 'queueUpdate':
           setQueueItem(message.data);
           break;
-        case 'countdownNotification':
-          setCountdownNotification(message.data);
+        case 'timerNotification':
+          switch (message.data.type) {
+            case 'queueCountdown':
+              setQueueCountdown(message.data);
+              break;
+            case 'machineTagOff':
+              // TODO: Implement machine tag off countdown
+              break;
+            case 'gymSessionEnding':
+              // TODO: Implement gym session ending countdown
+              break;
+          }
           break;
         default:
           console.error('Unknown message type:', message.type);
@@ -110,10 +124,10 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (countdownNotification && countdownNotification.remainingTime === 0) {
-      setCountdownNotification(null);
+    if (queueCountdown && queueCountdown.remainingTime === 0) {
+      setQueueCountdown(null);
     }
-  }, [countdownNotification]);
+  }, [queueCountdown]);
 
 
   const handleGymIdSubmit = async (e: React.FormEvent) => {
@@ -142,9 +156,8 @@ export default function DashboardPage() {
         method: 'PATCH',
         credentials: 'include',
       });
-      if (response.ok) {
-        setMachines({});
-        handleCloseModal();
+      if (!response.ok) {
+        console.error('Failed to end session');
       }
     } catch (error) {
       console.error('Error ending session:', error);
@@ -385,11 +398,11 @@ export default function DashboardPage() {
         )}
       </Modal>
 
-      {countdownNotification && (
+      {queueCountdown && (
         <div className="fixed bottom-4 right-4 bg-yellow-500 text-white p-4 rounded shadow-lg">
-          {countdownNotification.message}
+          {queueCountdown.message}
           <button
-            onClick={() => handleTagOn(countdownNotification.machineId)}
+            onClick={() => handleTagOn(queueCountdown.machineId)}
             className="ml-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
           >
             Tag On Now
