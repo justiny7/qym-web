@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useUser } from '@/contexts/UserContext';
-import { Machine, User, QueueItem } from '@/types';
+import { Machine, QueueItem, TimerNotification, BaseTimerNotification } from '@/types';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/Modal';
 
@@ -17,11 +17,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const floorPlanRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const [queueCountdown, setQueueCountdown] = useState<{
-    machineId: string;
-    message: string;
-    remainingTime: number;
-  } | null>(null);
+  const [queueCountdown, setQueueCountdown] = useState<TimerNotification | null>(null);
+  const [machineTagOffCountdown, setMachineTagOffCountdown] = useState<TimerNotification | null>(null);
+  const [gymSessionEndingCountdown, setGymSessionEndingCountdown] = useState<BaseTimerNotification | null>(null);
 
   const selectedMachine = selectedMachineId ? machines[selectedMachineId] : null;
 
@@ -38,6 +36,8 @@ export default function DashboardPage() {
       connectWebSocket();
     } else if (user && !user.gymId) {
       setQueueCountdown(null);
+      setMachineTagOffCountdown(null);
+      setGymSessionEndingCountdown(null);
       setMachines({});
       handleCloseModal();
     }
@@ -102,10 +102,10 @@ export default function DashboardPage() {
               setQueueCountdown(message.data);
               break;
             case 'machineTagOff':
-              // TODO: Implement machine tag off countdown
+              setMachineTagOffCountdown(message.data);
               break;
             case 'gymSessionEnding':
-              // TODO: Implement gym session ending countdown
+              setGymSessionEndingCountdown(message.data);
               break;
           }
           break;
@@ -122,13 +122,6 @@ export default function DashboardPage() {
       console.log('WebSocket disconnected');
     };
   };
-
-  useEffect(() => {
-    if (queueCountdown && queueCountdown.remainingTime === 0) {
-      setQueueCountdown(null);
-    }
-  }, [queueCountdown]);
-
 
   const handleGymIdSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,7 +391,7 @@ export default function DashboardPage() {
         )}
       </Modal>
 
-      {queueCountdown && (
+      {queueCountdown && queueCountdown.remainingTime > 0 && (
         <div className="fixed bottom-4 right-4 bg-yellow-500 text-white p-4 rounded shadow-lg">
           {queueCountdown.message}
           <button
@@ -407,6 +400,18 @@ export default function DashboardPage() {
           >
             Tag On Now
           </button>
+        </div>
+      )}
+
+      {machineTagOffCountdown && machineTagOffCountdown.remainingTime > 0 && (
+        <div className="fixed bottom-4 left-4 bg-red-500 text-white p-4 rounded shadow-lg">
+          {machineTagOffCountdown.message}
+        </div>
+      )}
+
+      {gymSessionEndingCountdown && gymSessionEndingCountdown.remainingTime > 0 && (
+        <div className="fixed top-4 right-4 bg-orange-500 text-white p-4 rounded shadow-lg">
+          {gymSessionEndingCountdown.message}
         </div>
       )}
     </div>

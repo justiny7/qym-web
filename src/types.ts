@@ -24,3 +24,12 @@ export interface QueueItem {
   timeEnqueued: Date;
   position: number;
 }
+
+export interface BaseTimerNotification {
+  message: string;
+  remainingTime: number;
+}
+
+export interface TimerNotification extends BaseTimerNotification {
+  machineId: string;
+}
