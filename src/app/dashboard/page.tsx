@@ -1,34 +1,31 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useUser } from '@/contexts/UserContext';
-import { Machine, QueueItem, TimerNotification, BaseTimerNotification } from '@/types';
+import { useState, useEffect, useRef } from 'react';
+import { useUser } from '@/hooks/useUser';
 import { useRouter } from 'next/navigation';
+import { Machine, QueueItem, TimerNotification, BaseTimerNotification } from '@/types';
+import { withRoleAccess } from '@/components/withRoleAccess';
+import { api } from '@/services/api';
 import Modal from '@/components/Modal';
 
-export default function DashboardPage() {
-  const { user, setUser, loading } = useUser();
+function DashboardPage() {
+  const { user, setUser, logout } = useUser();
   const [machines, setMachines] = useState<Record<string, Machine>>({});
   const [queueItem, setQueueItem] = useState<QueueItem | null>(null);
   const [gymId, setGymId] = useState('');
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
+
   const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const router = useRouter();
+
   const floorPlanRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
   const [queueCountdown, setQueueCountdown] = useState<TimerNotification | null>(null);
   const [machineTagOffCountdown, setMachineTagOffCountdown] = useState<TimerNotification | null>(null);
   const [gymSessionEndingCountdown, setGymSessionEndingCountdown] = useState<BaseTimerNotification | null>(null);
 
   const selectedMachine = selectedMachineId ? machines[selectedMachineId] : null;
-
-  // Redirect to login if user is not logged in
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [user, loading, router]);
 
   // Connect to WebSocket if user is in a gym
   useEffect(() => {
@@ -126,18 +123,11 @@ export default function DashboardPage() {
   const handleGymIdSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`http://localhost:3000/gyms/${gymId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ gymId }),
-        credentials: 'include',
-      });
-      if (response.ok) {
-        setGymId('');
-        setUser(user ? {...user, gymId} : null);
-      }
+      await api.toggleGymSession(gymId);
+
+      // Update user to trigger websocket connection
+      setUser(user ? {...user, gymId} : null);
+      setGymId('');
     } catch (error) {
       console.error('Error starting session:', error);
     }
@@ -145,13 +135,7 @@ export default function DashboardPage() {
 
   const handleEndSession = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/gyms/${user?.gymId}`, {
-        method: 'PATCH',
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        console.error('Failed to end session');
-      }
+      await api.toggleGymSession(user?.gymId);
     } catch (error) {
       console.error('Error ending session:', error);
     }
@@ -159,14 +143,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('http://localhost:3000/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (response.ok) {
-        setUser(null);
-        setMachines({});
-      }
+      await logout();
     } catch (error) {
       console.error('Error logging out:', error);
     }
@@ -194,13 +171,7 @@ export default function DashboardPage() {
 
   const handleTagOn = async (machineId: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/machines/${machineId}/workout-logs`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        console.error('Failed to tag on to machine');
-      }
+      await api.tagOn(machineId);
     } catch (error) {
       console.error('Error tagging on to machine:', error);
     }
@@ -208,13 +179,7 @@ export default function DashboardPage() {
 
   const handleTagOff = async (machineId: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/machines/${machineId}/workout-logs/current`, {
-        method: 'PATCH',
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        console.error('Failed to tag off from machine');
-      }
+      await api.tagOff(machineId);
     } catch (error) {
       console.error('Error tagging off from machine:', error);
     }
@@ -222,27 +187,15 @@ export default function DashboardPage() {
 
   const handleEnqueue = async (machineId: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/machines/${machineId}/queue`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        console.error('Failed to enqueue');
-      }
+      await api.enqueue(machineId);
     } catch (error) {
       console.error('Error enqueuing:', error);
     }
   }
 
-  const handleRemoveFromQueue = async (userId: string) => {
+  const handleRemoveFromQueue = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/queue`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        console.error('Failed to remove from queue');
-      }
+      await api.dequeue();
     } catch (error) {
       console.error('Error removing from queue:', error);
     }
@@ -255,10 +208,6 @@ export default function DashboardPage() {
     
     return `${baseClasses} ${machine.currentWorkoutLogId ? activeClass : inactiveClass}`;
   };
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-screen bg-gray-900 text-white">Loading...</div>;
-  }
 
   if (!user) {
     return null;
@@ -380,7 +329,7 @@ export default function DashboardPage() {
                 </button>
               ) : queueItem.machineId === selectedMachine.id && (
                 <button
-                  onClick={() => handleRemoveFromQueue(user.id)}
+                  onClick={() => handleRemoveFromQueue()}
                   className="mt-4 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
                 >
                   Remove from Queue
@@ -417,3 +366,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+export default withRoleAccess(DashboardPage, ['user']);

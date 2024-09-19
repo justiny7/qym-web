@@ -1,51 +1,66 @@
 'use client';
 
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@/types';
+import { getCurrentUser, login as apiLogin, logout as apiLogout } from '@/utils/auth';
 
 interface UserContextType {
   user: User | null;
-  setUser: (user: User | null) => void;
   loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
-const UserContext = createContext<UserContextType | undefined>(undefined);
+export const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function checkAuthStatus() {
+    async function loadUser() {
       try {
-        const response = await fetch('http://localhost:3000/profile', {
-          credentials: 'include',
-        });
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-        }
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
       } catch (error) {
-        console.error('Error checking auth status:', error);
+        console.error('Failed to load user:', error);
       } finally {
         setLoading(false);
       }
     }
 
-    checkAuthStatus();
+    loadUser();
   }, []);
 
-  return (
-    <UserContext.Provider value={{ user, setUser, loading }}>
-      {children}
-    </UserContext.Provider>
-  );
-}
+  const login = async (email: string, password: string) => {
+    try {
+      const loggedInUser = await apiLogin(email, password);
+      setUser(loggedInUser);
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
+  };
 
-export function useUser() {
-  const context = useContext(UserContext);
-  if (context === undefined) {
-    throw new Error('useUser must be used within a UserProvider');
-  }
-  return context;
+  const logout = async () => {
+    try {
+      await apiLogout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      throw error;
+    } finally {
+      setUser(null);
+    }
+  };
+
+  const value = {
+    user,
+    loading,
+    login,
+    logout,
+    setUser,
+  };
+
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }

@@ -1,15 +1,17 @@
 import Link from 'next/link';
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <h1 className="text-4xl font-bold">Welcome to My App</h1>
-      <Link href="/login" className="text-blue-500 hover:text-blue-700">
-        Go to Login
-      </Link>
-      <Link href="/dashboard" className="text-blue-500 hover:text-blue-700">
-        Go to Dashboard
-      </Link>
-    </main>
+    <div className="min-h-screen flex flex-col items-center justify-center">
+      <h1 className="text-4xl font-bold mb-6">Welcome to QYM</h1>
+      <div className="space-x-4">
+        <Link href="/login" className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+          Login
+        </Link>
+        <Link href="/register" className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+          Register
+        </Link>
+      </div>
+    </div>
   );
 }

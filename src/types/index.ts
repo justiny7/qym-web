@@ -2,6 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  role: string;
   gymId: string | null;
   currentWorkoutLogId: string | null;
   queueItem: QueueItem | null;
@@ -15,6 +16,8 @@ export interface Machine {
   currentWorkoutLogId: string | null;
   queueSize: number;
   maximumQueueSize: number;
+  averageUsageTime: number;
+  maximumSessionDuration: number;
 }
 
 export interface QueueItem {

@@ -1,45 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User } from '@/types'; // Adjust the import path if necessary
-import { useUser } from '@/contexts/UserContext';
+import { useUser } from '@/hooks/useUser';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
-  const { setUser } = useUser();
+  const { user, login } = useUser();
+
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'user') {
+        router.push('/dashboard');
+      } else if (user.role === 'admin') {
+        router.push('/admin-dashboard');
+      }
+    }
+  }, [user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3000/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error('Login failed');
-      }
-
-      const data = await response.json();
-      localStorage.setItem('wsToken', data.wsToken);
-
-      const user: User = await fetch('http://localhost:3000/profile', {
-        credentials: 'include'
-      }).then(res => res.json());
-      setUser(user);
-      
-      // Redirect to the dashboard or home page
-      router.push('/dashboard');
+      await login(email, password);
     } catch (err) {
       setError('Invalid email or password');
       console.error('Login error:', err);
